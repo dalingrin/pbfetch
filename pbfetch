@@ -1,0 +1,139 @@
+#!/bin/bash
+
+#BUILD DIRECTORY
+BUILDDIR="/home/erik/build"
+ABS="/var/abs"
+
+#COLORS
+#RED=$(tput setaf 1)
+#GREEN=$(tput setaf 2)
+#YELLOW=$(tput setaf 3)
+#BLUE=$(tput setaf 4)
+#WHITE=$(tput setaf 7)
+#BOLD=$(tput bold)
+RESET=$(tput sgr0)
+colorW="[1;37m" # white
+colorB="[1;34m" # blue
+colorR="[1;31m" # red
+colorG="[1;32m" # green
+colorY="[1;33m" # yellow
+colorM="[1;35m" # magenta
+
+
+#OUTPUT SHORTCUTS
+LEFTB="$BOLD\e$colorB["
+RIGHTB="$BOLD\e$colorB]"
+MARKER="$BOLD\e$colorG:: "
+EXT="${LEFTB}\e${colorG}Extracted${RIGHTB}${RESET}"
+DOWNL="${LEFTB}\e${colorG}Downloaded${RIGHTB}${RESET}"
+COPIED="${LEFTB}\e${colorG}Copied${RIGHTB}${RESET}"
+DFAIL="$LEFTB\e${colorR}DOWNLOAD FAILED$RIGHTB$RESET"
+CFAIL="$LEFTB\e${colorR}CLEAN UP FAILED$RIGHTB$RESET"
+NFOUND="$LEFTB\e${colorR}NOT FOUND$RIGHTB$RESET"
+INSTALLED="${LEFTB}\e${colorW}INSTALLED${RIGHTB}${RESET}"
+
+#AUR URL
+AUR="http://aur.archlinux.org/packages"
+
+#####################
+##### FUNCTIONS #####
+#####################
+cleanExit() {
+    rm $BUILDDIR/results.lst
+    exit
+}
+
+error() {
+    echo -e "$MARKER$1 ${RESET}"
+    exit
+}
+
+checkInstall() {
+    pacman -Qq $1 &>/dev/null    
+}
+
+searchAUR() {
+
+    touch $BUILDDIR/results.lst
+
+  for term in $@; do
+    curl -s "http://aur.archlinux.org/rpc.php?type=search&arg=${term}" | sed 's/{/\n/g' | grep $term >> $BUILDDIR/results.lst
+  done
+
+  [ ! -s $BUILDDIR/results.lst ] && exit
+
+  sort $BUILDDIR/results.lst | uniq | while read line; do
+    name="$(echo $line | awk -F '"' '{print $8}')"
+    vers="$(echo $line | awk -F '"' '{print $12}')"
+    desc="$(echo $line | awk -F '"' '{print $20}')"
+    flag="$(echo $line | awk -F '"' '{print $44}')"
+
+    echo -e -n "\e${colorM}aur/\e${colorW}$name \e${colorG}$vers\e[0m"
+    [ "$flag" = "1" -o "$flag" = "OutOfDate" ] && echo -e -n " \e${colorR}[out of date]\e[0m"
+
+    if checkInstall "$name";
+    then
+	echo -e -n " $INSTALLED"
+    fi
+
+    echo -e "\n    $desc"
+
+  done
+  
+  cleanExit
+}
+
+downloadAUR() {
+    cd $BUILDDIR || error "$LEFTB${colorR}Build directory does not exist$RIGHTB"
+
+    for i in "$@"
+    do
+	wget -q ${AUR}/$i/$i.tar.gz || error "\e$colorW$i $DFAIL$RESET"
+        echo -e "$MARKER\e$colorW$i $DOWNL" 
+
+	bsdtar -x -f $i.tar.gz && echo -e "$MARKER\e$colorW$i $EXT"
+        rm $i.tar.gz || error "${CFAIL}"
+    done
+
+    echo -e "$MARKER$LEFTB\e${colorG}Finished$RIGHTB $RESET"
+}
+
+copyABS() {
+    for i in "$@"
+    do
+	cp -r `find /var/abs -name "$i"` $BUILDDIR || error "\e$colorW$i $NFOUND"
+	echo -e "$MARKER\e$colorW$i $COPIED"
+    done
+}
+
+usage() {
+    echo -e "Usage: pkgbget [opiton] [package1] [package2] ....\n"
+    echo -e "    options:"
+    echo -e "        -d  Download from AUR and extract to build directory"
+    echo -e "        -s  Search AUR for any package given (Searches name and description)"
+    echo -e "        -abs Copy from local abs folder to build directory\n"
+    echo -e "Example: pkgbget -d nvidia-beta nvidia-utils-beta\n"
+}
+
+
+#####################
+####### Main ########
+#####################
+
+case $1 in
+-s)
+    shift
+    searchAUR $@
+    ;;
+-abs)
+    shift
+    copyABS $@
+    ;;
+-d)
+    shift
+    downloadAUR $@
+    ;;
+*)
+    usage $1
+esac
+
