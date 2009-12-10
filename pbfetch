@@ -1,4 +1,18 @@
 #!/bin/bash
+######################################################
+# Search algorithm heavily influenced by             #
+# aurget: http://pbrisbin.com:8080/pages/aurget.html #
+######################################################
+
+NAME="pbfetch"
+VERSION="v0.1"
+DESCRIPTION="Simple script to fetch PKGBUILDS from AUR & ABS"
+AUTHOR="-Erik Hardesty"
+DATE="(12/10/09)"
+
+
+
+
 
 #BUILD DIRECTORY
 BUILDDIR="/home/erik/build"
@@ -107,12 +121,18 @@ copyABS() {
 }
 
 usage() {
-    echo -e "Usage: pkgbget [opiton] [package1] [package2] ....\n"
+    echo -e "Usage: pbfetch [opiton] [package1] [package2] ....\n"
     echo -e "    options:"
     echo -e "        -d  Download from AUR and extract to build directory"
     echo -e "        -s  Search AUR for any package given (Searches name and description)"
     echo -e "        -abs Copy from local abs folder to build directory\n"
-    echo -e "Example: pkgbget -d nvidia-beta nvidia-utils-beta\n"
+    echo -e "Example: pbfetch -d nvidia-beta nvidia-utils-beta\n"
+}
+
+version() {
+    echo -e "\n    \e${colorW}$NAME \e${colorG}$VERSION"
+    echo -e "    ${RESET}$DESCRIPTION"
+    echo -e "    \e${colorW}$AUTHOR \e${colorG}$DATE${RESET}\n"
 }
 
 
@@ -132,6 +152,9 @@ case $1 in
 -d)
     shift
     downloadAUR $@
+    ;;
+-v)
+    version
     ;;
 *)
     usage $1
