@@ -226,7 +226,7 @@ UpgradeAUR() {
     while true; do
 	read ync
 	case $ync in
-	    [Yy]* ) echo "Yes"
+	    [Yy]* ) 
 		FORCE=true
 		downloadAUR $1 ${PKGUPGRADES[@]}
 		makePackages true ${PKGUPGRADES[@]}
@@ -243,7 +243,11 @@ UpgradeAUR() {
 		done
 		break;
 		;;
-	    *) echo "Yes"; break;;
+	    *) 
+		FORCE=true
+		downloadAUR $1 ${PKGUPGRADES[@]}
+		makePackages true ${PKGUPGRADES[@]}
+		;;
 	esac
     done
 
