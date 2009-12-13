@@ -238,8 +238,8 @@ UpgradeAUR() {
 		read choices
 		arrayC=( $choices )
 		for i in ${arrayC[@]}; do
-		    downloadAUR false ${PKGUPGRADES[$i]}
-		    makePackages true ${PKGUPGRADES[$i]}
+		    downloadAUR false ${PKGUPGRADES[${arrayC[$i]}]}
+		    makePackages true ${PKGUPGRADES[${arrayC[$i]}]}
 		done
 		break;
 		;;
