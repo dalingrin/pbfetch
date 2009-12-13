@@ -228,7 +228,7 @@ UpgradeAUR() {
 	case $ync in
 	    [Yy]* ) echo "Yes"
 		FORCE=true
-		downloadAUR false ${PKGUPGRADES[@]}
+		downloadAUR $1 ${PKGUPGRADES[@]}
 		makePackages true ${PKGUPGRADES[@]}
 	       	break;;
 	    [Nn]* ) break;;
@@ -238,7 +238,7 @@ UpgradeAUR() {
 		read choices
 		arrayC=( $choices )
 		for i in ${arrayC[@]}; do
-		    downloadAUR false ${PKGUPGRADES[${arrayC[$i]}]}
+		    downloadAUR $1 ${PKGUPGRADES[${arrayC[$i]}]}
 		    makePackages true ${PKGUPGRADES[${arrayC[$i]}]}
 		done
 		break;
@@ -264,6 +264,7 @@ usage() {
     echo -e "        -ie Download from AUR, extract, edit PKGBUILD, make and install package(s)"
     echo -e "        -s  Search AUR for any package given (Searches name and description)"
     echo -e "        -u  Check AUR for package updates"
+    echo -e "        -ue Check AUR for package updates and edit PKGBUILD before install"
     echo -e "        -abs Copy from local abs folder to build directory\n"
     echo -e "        -v  Display version information"
     echo -e "Example: pbfetch -d nvidia-beta nvidia-utils-beta\n"
@@ -318,7 +319,10 @@ case $1 in
     makePackages true $@
     ;;
 -u)
-    UpgradeAUR
+    UpgradeAUR false
+    ;;
+-ue)
+    UpgradeAUR true
     ;;
 -v)
     version
