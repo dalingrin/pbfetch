@@ -5,16 +5,16 @@
 ######################################################
 
 NAME="pbfetch"
-VERSION="v0.2"
+VERSION="v0.3"
 DESCRIPTION="Simple script to fetch PKGBUILDS from AUR & ABS"
 AUTHOR="-Erik Hardesty"
-DATE="(12/11/09)"
+DATE="(12/13/09)"
 
 #PKGBUILD EDITOR
 EDITOR="vim"
 
 #BUILD DIRECTORY
-BUILDDIR="/home/erik/build"
+BUILDDIR=~/build
 
 #LOCAL ABS DIRECTORY
 ABS="/var/abs"
@@ -43,6 +43,17 @@ DFAIL="$LEFTB\e${colorR}DOWNLOAD FAILED$RIGHTB$RESET"
 CFAIL="$LEFTB\e${colorR}CLEAN UP FAILED$RIGHTB$RESET"
 NFOUND="$LEFTB\e${colorR}NOT FOUND$RIGHTB$RESET"
 INSTALLED="${LEFTB}\e${colorW}INSTALLED${RIGHTB}${RESET}"
+
+#WORKING GLOBAL VARIABLES
+PKGNAME="" 
+PKGVERSION=""
+PKGRELEASE=""
+declare -a PKGUPGRADES
+UPGRADEINDX=0
+FORCE=true
+
+
+
 
 
 
@@ -144,7 +155,13 @@ makePackages() {
 	then
 	    cd $BUILDDIR/$i
 	    if $INSTALL; then
-		makepkg -si
+		if $FORCE; then
+		    makepkg -fsi
+		else
+		    makepkg -si
+		fi
+	    elif $FORCE; then
+		makepkg -fs
 	    else
 		makepkg -s
 	    fi
@@ -154,6 +171,87 @@ makePackages() {
     done
 
 }
+
+checkVersion () {   
+    TEMP="$(curl -s "http://aur.archlinux.org/rpc.php?type=info&arg=$PKGNAME" | awk -F '"' '{print $18}')"
+    AURVERSION="$(echo $TEMP | awk -F "-" '{print $1}')"
+    AURRELEASE="$(echo $TEMP | awk -F "-" '{print $2}')"
+
+    if [ "$AURVERSION" \> "$PKGVERSION" ]; then
+	UPGRADE="\e${colorG}Update Available"
+	echo $PKGNAME >> $BUILDDIR/upgrades.txt
+    elif [[ "$AURVERSION" = "$PKGVERSION" && "$AURRELEASE" > "$PKGRELEASE" ]]; then
+	UPGRADE="\e${colorG}Update Available"
+	echo $PKGNAME >> $BUILDDIR/upgrades.txt
+    elif [ "$AURVERSION" == "" ]; then
+	UPGRADE="\e${colorY}Not found on AUR"
+    else
+	UPGRADE="\e${colorB}Up to date"
+    fi
+	    
+    echo -e "$PKGNAME $PKGVERSION-$PKGRELEASE \e${colorW}$AURVERSION-$AURRELEASE $UPGRADE${RESET}"
+
+}
+
+
+UpgradeAUR() {
+    echo -e "Checking AUR for package updates..."
+    
+    pacman -Qm | sort > $BUILDDIR/localList.txt
+
+    while read line; do
+	PKGNAME="$(echo $line | awk -F " " '{print $1}')"
+	PKGVERSION="$(echo $line | awk -F " " '{print $2}' | awk -F "-" '{print $1}')"
+	PKGRELEASE="$(echo $line | awk -F " " '{print $2}' | awk -F "-" '{print $2}')"
+	checkVersion&
+    done < $BUILDDIR/localList.txt
+    wait
+    
+    while read line; do
+	PKGUPGRADES[UPGRADEINDX]=$line
+	((UPGRADEINDX++))
+    done < $BUILDDIR/upgrades.txt
+    
+    echo
+    for ((i = 0; i<$UPGRADEINDX; i++))
+    do
+	echo -e -n "\e${colorG}$i${RESET}:\e${colorY}${PKGUPGRADES[$i]} ${RESET}| "
+    done
+
+    echo -e "\n\e${colorB}------------------------------------------------------------------${RESET}"
+
+    echo -e "\e${colorW}Do you want to update these packages?"
+    echo -e "\e${colorW}Press \e${colorG}Y \e${colorW}to update all, \e${colorG} C\e${colorW} to choose which to update: [Y/n/c]${RESET}"
+
+    while true; do
+	read ync
+	case $ync in
+	    [Yy]* ) echo "Yes"
+		FORCE=true
+		downloadAUR false ${PKGUPGRADES[@]}
+		makePackages true ${PKGUPGRADES[@]}
+	       	break;;
+	    [Nn]* ) break;;
+	    [Cc]* )
+		FORCE=true
+	        echo -n "Enter the number of the corresponding package(s) (separate numbers by space)"	
+		read choices
+		arrayC=( $choices )
+		for i in ${arrayC[@]}; do
+		    downloadAUR false ${PKGUPGRADES[$i]}
+		    makePackages true ${PKGUPGRADES[$i]}
+		done
+		break;
+		;;
+	    *) echo "Yes"; break;;
+	esac
+    done
+
+
+    rm $BUILDDIR/upgrades.txt
+    rm $BUILDDIR/localList.txt
+}
+
 
 usage() {
     echo -e "Usage: pbfetch [opiton] [package1] [package2] ....\n"
@@ -165,6 +263,7 @@ usage() {
     echo -e "        -i  Download from AUR, extract, make and install package(s)"
     echo -e "        -ie Download from AUR, extract, edit PKGBUILD, make and install package(s)"
     echo -e "        -s  Search AUR for any package given (Searches name and description)"
+    echo -e "        -u  Check AUR for package updates"
     echo -e "        -abs Copy from local abs folder to build directory\n"
     echo -e "        -v  Display version information"
     echo -e "Example: pbfetch -d nvidia-beta nvidia-utils-beta\n"
@@ -217,6 +316,9 @@ case $1 in
     shift
     downloadAUR true $@
     makePackages true $@
+    ;;
+-u)
+    UpgradeAUR
     ;;
 -v)
     version
