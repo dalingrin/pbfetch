@@ -49,6 +49,7 @@ PKGNAME=""
 PKGVERSION=""
 PKGRELEASE=""
 declare -a PKGUPGRADES
+declare -a selectedUpdates
 UPGRADEINDX=0
 FORCE=true
 
@@ -211,6 +212,8 @@ UpgradeAUR() {
 	PKGUPGRADES[UPGRADEINDX]=$line
 	((UPGRADEINDX++))
     done < $BUILDDIR/upgrades.txt
+    rm $BUILDDIR/upgrades.txt
+
     
     echo
     for ((i = 0; i<$UPGRADEINDX; i++))
@@ -236,11 +239,9 @@ UpgradeAUR() {
 		FORCE=true
 	        echo -n "Enter the number of the corresponding package(s) (separate numbers by space)"	
 		read choices
-		arrayC=( $choices )
-		for i in ${arrayC[@]}; do
-		    downloadAUR $1 ${PKGUPGRADES[${arrayC[$i]}]}
-		    makePackages true ${PKGUPGRADES[${arrayC[$i]}]}
-		done
+		prepSelectedArray "$choices"
+		downloadAUR $1 ${selectedUpdates[@]}
+		makePackages true ${selectedUpdates[@]}
 		break;
 		;;
 	    *) 
@@ -252,8 +253,16 @@ UpgradeAUR() {
     done
 
 
-    rm $BUILDDIR/upgrades.txt
     rm $BUILDDIR/localList.txt
+}
+
+prepSelectedArray() {
+    arrayI=( $1 )
+    indx=0
+    for i in ${arrayI[@]}; do
+	selectedUpdates[indx]=${PKGUPGRADES[$i]}
+	((indx++))
+    done
 }
 
 
@@ -327,6 +336,10 @@ case $1 in
     ;;
 -ue)
     UpgradeAUR true
+    ;;
+-ua)
+    sudo pacman -Syu
+    UpgradeAUR false
     ;;
 -v)
     version
