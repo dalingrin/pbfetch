@@ -314,7 +314,7 @@ case $1 in
 -m)
     shift
     downloadAUR false $@
-    makePackages $@
+    makePackages false $@
     ;;
 -me)
     shift
