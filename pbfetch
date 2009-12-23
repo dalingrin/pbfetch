@@ -5,7 +5,7 @@
 ######################################################
 
 name="pbfetch"
-version="v0.4"
+version="v0.5"
 description="Simple script to fetch PKGBUILDS from aur & abs"
 author="-Erik Hardesty"
 date="(12/22/09)"
@@ -13,6 +13,11 @@ date="(12/22/09)"
 ######################################################
 ################# Begin User Settings ################
 ######################################################
+
+#####################################
+#### Pacman sync fallback to AUR ####
+#####################################
+fallback=true
 
 #########################
 #### Colorize output ####
@@ -79,7 +84,8 @@ fi
 ##########################
 leftB="$bold$colorB["
 rightB="$bold$colorB]"
-marker="$bold$colorG:: "
+bMarker="$bold$colorG==> $reset"
+lMarker="  $colorB-> "
 ext="${leftB}${colorG}Extracted${rightB}${reset}"
 downl="${leftB}${colorG}Downloaded${rightB}${reset}"
 copied="${leftB}${colorG}Copied${rightB}${reset}"
@@ -141,13 +147,13 @@ DownloadAur() {
   for i in "$@"
   do
     wget -q ${aur}/$i/$i.tar.gz || error "$colorW$i $dFail$reset"
-    echo -e "$marker$colorW$i $downl" 
+    echo -e "$bMarker$colorW$i $downl" 
 
-    bsdtar -x -f $i.tar.gz && echo -e "$marker$colorW$i $ext"
+    bsdtar -x -f $i.tar.gz && echo -e "$bMarker$colorW$i $ext"
     rm $i.tar.gz || error "${cFail}"
     if $edit ; then
       editPB $i
-      echo -e "$marker$colorW$i ${leftB}${colorB}${colorG}Edit complete${rightB}"
+      echo -e "$lMarker$colorW$i ${leftB}${colorB}${colorG}Edit complete${rightB}"
     fi
   done
 
@@ -165,31 +171,84 @@ CopyAbs() {
   for i in "$@"
   do
     cp -r `find /var/abs -name "$i"` $buildDir || error "$colorW$i $nFound"
-    echo -e "$marker$colorW$i $copied"
+    echo -e "$bMarker$colorW$i $copied"
   done
 }
 
 MakePackages() {
   for i in "$@"
   do
-    if [ -e $buildDir/$i/PKGBUILD ]
-    then
+    if [ -e $buildDir/$i/PKGBUILD ]; then
       cd $buildDir/$i
       if $installPkg; then
-	if $force; then
-	  makepkg -fsi
-	else
-	  makepkg -si
-	fi
+	      if $force; then
+          CheckDepends
+	        makepkg -fi
+	      else
+          CheckDepends
+	        makepkg -i
+	      fi
       elif $force; then
-	makepkg -fs
+        CheckDepends
+	      makepkg -f
       else
-	makepkg -s
+        CheckDepends
+	      makepkg 
       fi
     else
       echo -e "${colorR}${bold}Error: ${colorW}Could not open PKGBUILD!${reset}"
     fi
   done
+}
+
+CheckDepends() {
+  echo -e "\nChecking package dependencies..."
+  
+  #Set architecture variables
+  source /etc/makepkg.conf
+  source /etc/abs.conf
+
+  #Remove everything from build() to end of file for sourcing
+  cat PKGBUILD | sed '/build()/,$ d' > PKGBUILD.source
+  source PKGBUILD.source &> /dev/null
+  rm PKGBUILD.source
+  
+  dependsNeeded=$(sudo $pacman -T ${depends[@]})
+  #if pacman returns nothing then all dependencies
+  #already installed, no need to continue
+  if [[ $dependsNeeded == "" ]]; then
+    return
+  fi
+
+  depsFromRepo=()
+  depsFromAUR=()
+  availFromRepo=$(pacman -Sql)
+
+  
+  #check if dependency is available from repositories
+  #save in array if so
+  count=-1
+  countAUR=0
+  for dep in ${dependsNeeded[@]}; do
+    ((count++))
+    for pkg in ${availFromRepo[@]}; do
+      if [[ $pkg == $dep ]]; then
+        depsFromRepo[$count]=$dep
+      fi
+    done
+    if [[ ${depsFromRepo[$count]} != $dep ]]; then
+      depsFromAUR[$countAUR]=$dep
+      ((countAUR++))
+    fi
+  done
+
+  if [[ ${#depsFromAUR[*]} -gt 0 ]]; then
+    echo -e "Installing dependencies from AUR..."
+    DownloadAur ${depsFromAUR[@]} || error "Dependency not found! Exiting..."
+    MakePackages ${depsFromAUR[@]} || exit
+  fi
+
+  sudo $pacman -S --needed ${depsFromRepo[@]}
 
 }
 
@@ -198,6 +257,7 @@ checkVersion () {
 	| awk -F '"' '{print $18}')"
   aurversion="$(echo $TEMP | awk -F "-" '{print $1}')"
   aurRELEASE="$(echo $TEMP | awk -F "-" '{print $2}')"
+
 
   if [ "$aurversion" \> "$pkgVersion" ]; then
     UPGRADE="${colorG}Update Available"
@@ -290,7 +350,7 @@ Usage() {
   echo -e "    -v  Display version information\n"
   echo -e "Example: pbfetch -d nvidia-beta nvidia-utils-beta\n\n"
   echo -e "  pbfetch will also pass any pacman related options to the "
-  echo -e "  pacman binary specifed in the script, eg. pbfetch -Syu\n"
+  echo -e "  pacman binary specifed in the script, eg. pbfetch -Qs\n"
 }
 
 version() {
@@ -316,7 +376,7 @@ checkInstall() {
 }
 
 error() {
-  echo -e "$marker$1 ${reset}"
+  echo -e "$bMarker$1 ${reset}"
   exit
 }
 
@@ -384,6 +444,17 @@ case $1 in
   installPkg=true
   sudo $pacman -Syu
   UpgradeAur
+  ;;
+-S)
+  if $fallback; then
+    shift
+    sudo $pacman -S $@ && exit || echo -e "Attempting install from AUR..."
+    installPkg=true
+    DownloadAur $@
+    MakePackages $@
+  else
+    sudo $pacman $@
+  fi
   ;;
 -v)
   version
