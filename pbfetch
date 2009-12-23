@@ -5,36 +5,55 @@
 ######################################################
 
 name="pbfetch"
-version="v0.35"
+version="v0.4"
 description="Simple script to fetch PKGBUILDS from aur & abs"
 author="-Erik Hardesty"
-date="(12/13/09)"
+date="(12/22/09)"
 
 ######################################################
-#################### User Settings ###################
+################# Begin User Settings ################
 ######################################################
 
-#Colorize output
+#########################
+#### Colorize output ####
+#########################
 color=true
+#color=false
 
-#PKGBUILD editor
+#######################
+#### Pacman binary ####
+#######################
+#pacman="pacman"
+pacman="pacman-color"
+
+#########################
+#### PKGBUILD editor ####
+#########################
 editor="vim"
+#editor="gvim"
 
-#BUILD DIRECTORY
+#########################
+#### BUILD DIRECTORY ####
+#########################
 buildDir=~/build
 
-#LOCAL abs DIRECTORY
+#############################
+#### LOCAL abs DIRECTORY ####
+#############################
 abs="/var/abs"
 
-#aur URL
+#################
+#### aur URL ####
+#################
 aur="http://aur.archlinux.org/packages"
 
 ######################################################
 ################## End User Settings #################
 ######################################################
 
-
-#COLORS
+################
+#### COLORS ####
+################
 if $color; then
     bold=$(tput bold)
     reset=$(tput sgr0)
@@ -55,8 +74,9 @@ else
     colorM=''
 fi
 
-
-#OUTPUT SHORTCUTS
+##########################
+#### OUTPUT SHORTCUTS ####
+##########################
 leftB="$bold$colorB["
 rightB="$bold$colorB]"
 marker="$bold$colorG:: "
@@ -68,7 +88,9 @@ cFail="$leftB${colorR}CLEAN UP FAILED$rightB$reset"
 nFound="$leftB${colorR}NOT FOUND$rightB$reset"
 installed="${leftB}${colorW}installed${rightB}${reset}"
 
-#WORKING GLOBAL VARIABLES
+##################################
+#### WORKING GLOBAL VARIABLES ####
+##################################
 pkgName="" 
 pkgVersion=""
 pkgRelease=""
@@ -80,33 +102,15 @@ edit=false
 installPkg=false
 
 
-
-
-
-
-#####################
-##### FUNCTIONS #####
-#####################
-cleanExit() {
-    rm $buildDir/results.lst
-    exit
-}
-
-error() {
-    echo -e "$marker$1 ${reset}"
-    exit
-}
-
-checkInstall() {
-    pacman -Qq $1 &>/dev/null    
-}
+#############################
+##### PRIMARY FUNCTIONS #####
+#############################
 
 SearchAur() {
 
-    touch $buildDir/results.lst
-
   for term in $@; do
-    curl -s "http://aur.archlinux.org/rpc.php?type=search&arg=${term}" | sed 's/{/\n/g' | grep $term >> $buildDir/results.lst
+    curl -s "http://aur.archlinux.org/rpc.php?type=search&arg=${term}" \
+	| sed 's/{/\n/g' | grep $term >> $buildDir/results.lst
   done
 
   [ ! -s $buildDir/results.lst ] && exit
@@ -117,263 +121,299 @@ SearchAur() {
     desc="$(echo $line | awk -F '"' '{print $20}')"
     flag="$(echo $line | awk -F '"' '{print $44}')"
 
-    echo -e -n "${colorM}aur/${colorW}$name ${colorG}$vers${bold}"
-    [ "$flag" = "1" -o "$flag" = "OutOfDate" ] && echo -e -n " ${colorR}[out of date]${bold}"
-
+    echo -e -n "${colorM}aur/${colorW}$name ${colorG}$vers${bold}$reset"
+    [ "$flag" = "1" -o "$flag" = "OutOfDate" ] && echo -e -n " ${colorR}[out of date]${bold}${reset}"
     if checkInstall "$name";
     then
 	echo -e -n " $installed"
     fi
 
     echo -e "\n    $desc"
-
   done
   
-  cleanExit
+  rm $buildDir/results.lst
+  exit
 }
 
 DownloadAur() {
-    cd $buildDir || error "$leftB${colorR}Build directory does not exist$rightB"
+  cd $buildDir || error "$leftB${colorR}Build directory does not exist$rightB"
 
-    for i in "$@"
-    do
-	wget -q ${aur}/$i/$i.tar.gz || error "$colorW$i $dFail$reset"
-        echo -e "$marker$colorW$i $downl" 
+  for i in "$@"
+  do
+    wget -q ${aur}/$i/$i.tar.gz || error "$colorW$i $dFail$reset"
+    echo -e "$marker$colorW$i $downl" 
 
-	bsdtar -x -f $i.tar.gz && echo -e "$marker$colorW$i $ext"
-        rm $i.tar.gz || error "${cFail}"
-	if $edit ; then
-	    editPB $i
-	    echo -e "$marker$colorW$i ${leftB}${colorB}${colorG}Edit complete${rightB}"
-	fi
-    done
+    bsdtar -x -f $i.tar.gz && echo -e "$marker$colorW$i $ext"
+    rm $i.tar.gz || error "${cFail}"
+    if $edit ; then
+      editPB $i
+      echo -e "$marker$colorW$i ${leftB}${colorB}${colorG}Edit complete${rightB}"
+    fi
+  done
 
 }
 
 editPB() {
-    if [ -e $1/PKGBUILD ]
-    then
-	$editor $buildDir/$1/PKGBUILD
-    else
-	echo -e "${colorR}${bold}Error: ${colorW}Could not open PKGBUILD!${reset}"
-    fi
+  if [ -e $1/PKGBUILD ]; then
+    $editor $buildDir/$1/PKGBUILD
+  else
+    echo -e "${colorR}${bold}Error: ${colorW}Could not open PKGBUILD!${reset}"
+  fi
 }
 
 CopyAbs() {
-    for i in "$@"
-    do
-	cp -r `find /var/abs -name "$i"` $buildDir || error "$colorW$i $nFound"
-	echo -e "$marker$colorW$i $copied"
-    done
+  for i in "$@"
+  do
+    cp -r `find /var/abs -name "$i"` $buildDir || error "$colorW$i $nFound"
+    echo -e "$marker$colorW$i $copied"
+  done
 }
 
 MakePackages() {
-
-    for i in "$@"
-    do
-	if [ -e $buildDir/$i/PKGBUILD ]
-	then
-	    cd $buildDir/$i
-	    if $installPkg; then
-		if $force; then
-		    makepkg -fsi
-		else
-		    makepkg -si
-		fi
-	    elif $force; then
-		makepkg -fs
-	    else
-		makepkg -s
-	    fi
+  for i in "$@"
+  do
+    if [ -e $buildDir/$i/PKGBUILD ]
+    then
+      cd $buildDir/$i
+      if $installPkg; then
+	if $force; then
+	  makepkg -fsi
 	else
-	    echo -e "${colorR}${bold}Error: ${colorW}Could not open PKGBUILD!${reset}"
+	  makepkg -si
 	fi
-    done
+      elif $force; then
+	makepkg -fs
+      else
+	makepkg -s
+      fi
+    else
+      echo -e "${colorR}${bold}Error: ${colorW}Could not open PKGBUILD!${reset}"
+    fi
+  done
 
 }
 
 checkVersion () {   
-    TEMP="$(curl -s "http://aur.archlinux.org/rpc.php?type=info&arg=$pkgName" | awk -F '"' '{print $18}')"
-    aurversion="$(echo $TEMP | awk -F "-" '{print $1}')"
-    aurRELEASE="$(echo $TEMP | awk -F "-" '{print $2}')"
+  TEMP="$(curl -s "http://aur.archlinux.org/rpc.php?type=info&arg=$pkgName" \
+	| awk -F '"' '{print $18}')"
+  aurversion="$(echo $TEMP | awk -F "-" '{print $1}')"
+  aurRELEASE="$(echo $TEMP | awk -F "-" '{print $2}')"
 
-    if [ "$aurversion" \> "$pkgVersion" ]; then
-	UPGRADE="${colorG}Update Available"
-	echo $pkgName >> $buildDir/upgrades.txt
-    elif [[ "$aurversion" = "$pkgVersion" && "$aurRELEASE" > "$pkgRelease" ]]; then
-	UPGRADE="${colorG}Update Available"
-	echo $pkgName >> $buildDir/upgrades.txt
-    elif [ "$aurversion" == "" ]; then
-	UPGRADE="${colorY}Not found on aur"
-    else
-	UPGRADE="${colorB}Up to date"
-    fi
+  if [ "$aurversion" \> "$pkgVersion" ]; then
+    UPGRADE="${colorG}Update Available"
+    echo $pkgName >> $buildDir/upgrades.txt
+  elif [[ "$aurversion" = "$pkgVersion" && "$aurRELEASE" > "$pkgRelease" ]]; then
+    UPGRADE="${colorG}Update Available"
+    echo $pkgName >> $buildDir/upgrades.txt
+  elif [ "$aurversion" == "" ]; then
+    UPGRADE="${colorY}Not found on aur"
+  else
+    UPGRADE="${colorB}Up to date"
+  fi
 	    
-    echo -e "$pkgName $pkgVersion-$pkgRelease ${colorW}$aurversion-$aurRELEASE $UPGRADE${reset}"
-
+  echo -e "$pkgName $pkgVersion-$pkgRelease ${colorW}$aurversion-$aurRELEASE $UPGRADE${reset}"
 }
-
 
 UpgradeAur() {
-    echo -e "Checking aur for package updates..."
+  echo -e "Checking aur for package updates..."
     
-    pacman -Qm | sort > $buildDir/localList.txt
+  $pacman -Qm | sort > $buildDir/localList.txt
 
-    while read line; do
-	pkgName="$(echo $line | awk -F " " '{print $1}')"
-	pkgVersion="$(echo $line | awk -F " " '{print $2}' | awk -F "-" '{print $1}')"
-	pkgRelease="$(echo $line | awk -F " " '{print $2}' | awk -F "-" '{print $2}')"
-	checkVersion&
-    done < $buildDir/localList.txt
-    wait
+  while read line; do
+    pkgName="$(echo $line | awk -F " " '{print $1}')"
+    pkgVersion="$(echo $line | awk -F " " '{print $2}' | awk -F "-" '{print $1}')"
+    pkgRelease="$(echo $line | awk -F " " '{print $2}' | awk -F "-" '{print $2}')"
+    checkVersion&
+  done < $buildDir/localList.txt
+  wait
     
-    while read line; do
-	pkgUpgrades[upgradeIndx]=$line
-	((upgradeIndx++))
-    done < $buildDir/upgrades.txt
-    rm $buildDir/upgrades.txt
+  while read line; do
+    pkgUpgrades[upgradeIndx]=$line
+    ((upgradeIndx++))
+  done < $buildDir/upgrades.txt
+  rm $buildDir/upgrades.txt
 
     
-    echo
-    for ((i = 0; i<$upgradeIndx; i++))
-    do
-	echo -e -n "${colorG}$i${reset}:${colorY}${pkgUpgrades[$i]} ${reset}| "
-    done
+  echo
+  for ((i = 0; i<$upgradeIndx; i++)); do
+    echo -e -n "${colorG}$i${reset}:${colorY}${pkgUpgrades[$i]} ${reset}| "
+  done
 
-    echo -e "\n${colorB}------------------------------------------------------------------${reset}"
+  echo -e "\n${colorB}------------------------------------------------------------------${reset}"
+  echo -e "${colorW}Do you want to update these packages?"
+  echo -e "${colorW}Press ${colorG}Y ${colorW}to update all, ${colorG} C${colorW} to choose which to update: [Y/n/c]${reset}"
 
-    echo -e "${colorW}Do you want to update these packages?"
-    echo -e "${colorW}Press ${colorG}Y ${colorW}to update all, ${colorG} C${colorW} to choose which to update: [Y/n/c]${reset}"
+  while true; do
+    read ync
+    case $ync in
+      [Yy]* ) 
+    	force=true
+	DownloadAur ${pkgUpgrades[@]}
+	MakePackages ${pkgUpgrades[@]}
+       	break;;
+      [Nn]* ) break;;
+      [Cc]* )
+	force=true
+        echo -n "Enter the number of the corresponding package(s) (separate numbers by space)"	
+	read choices
+	prepSelectedArray "$choices"
+	DownloadAur ${selectedUpdates[@]}
+	MakePackages ${selectedUpdates[@]}
+	break;
+	;;
+      *) 
+	force=true
+	DownloadAur ${pkgUpgrades[@]}
+	MakePackages ${pkgUpgrades[@]}
+	;;
+    esac
+  done
 
-    while true; do
-	read ync
-	case $ync in
-	    [Yy]* ) 
-		force=true
-		DownloadAur ${pkgUpgrades[@]}
-		MakePackages ${pkgUpgrades[@]}
-	       	break;;
-	    [Nn]* ) break;;
-	    [Cc]* )
-		force=true
-	        echo -n "Enter the number of the corresponding package(s) (separate numbers by space)"	
-		read choices
-		prepSelectedArray "$choices"
-		DownloadAur ${selectedUpdates[@]}
-		MakePackages ${selectedUpdates[@]}
-		break;
-		;;
-	    *) 
-		force=true
-		DownloadAur ${pkgUpgrades[@]}
-		MakePackages ${pkgUpgrades[@]}
-		;;
-	esac
-    done
-
-
-    rm $buildDir/localList.txt
+  rm $buildDir/localList.txt
 }
-
-prepSelectedArray() {
-    arrayI=( $1 )
-    indx=0
-    for i in ${arrayI[@]}; do
-	selectedUpdates[indx]=${pkgUpgrades[$i]}
-	((indx++))
-    done
-}
-
 
 Usage() {
-    echo -e "Usage: pbfetch [opiton] [package1] [package2] ....\n"
-    echo -e "    options:"
-    echo -e "        -d  Download from aur and extract to build directory"
-    echo -e "        -de Download from aur, extract and edit PKGBUILD"
-    echo -e "        -m  Download from aur, extract, and make the package(s)"
-    echo -e "        -me Download from aur, extract, edit PKGBUILD and make the package(s)"
-    echo -e "        -i  Download from aur, extract, make and install package(s)"
-    echo -e "        -ie Download from aur, extract, edit PKGBUILD, make and install package(s)"
-    echo -e "        -s  Search aur for any package given (Searches name and description)"
-    echo -e "        -u  Check aur for package updates"
-    echo -e "        -ue Check aur for package updates and edit PKGBUILD before install"
-    echo -e "        -abs Copy from local abs folder to build directory\n"
-    echo -e "        -v  Display version information"
-    echo -e "Example: pbfetch -d nvidia-beta nvidia-utils-beta\n"
+  echo -e "Usage: pbfetch [opiton] [package1] [package2] ....\n"
+  echo -e "  options:"
+  echo -e "    -d  Download from aur and extract to build directory"
+  echo -e "    -de Download from aur, extract and edit PKGBUILD"
+  echo -e "    -m  Download from aur, extract, and make the package(s)"
+  echo -e "    -me Download from aur, extract, edit PKGBUILD and make the package(s)"
+  echo -e "    -i  Download from aur, extract, make and install package(s)"
+  echo -e "    -ie Download from aur, extract, edit PKGBUILD, make and install package(s)"
+  echo -e "    -s  Search aur for any package given (Searches name and description)"
+  echo -e "    -sa Search repo and aur for any package given"
+  echo -e "    -u  Check aur for package updates"
+  echo -e "    -ue Check aur for package updates and edit PKGBUILD before install"
+  echo -e "    -ua Check aur and official repos for updates"
+  echo -e "    -abs Copy from local abs folder to build directory"
+  echo -e "    -v  Display version information\n"
+  echo -e "Example: pbfetch -d nvidia-beta nvidia-utils-beta\n\n"
+  echo -e "  pbfetch will also pass any pacman related options to the "
+  echo -e "  pacman binary specifed in the script, eg. pbfetch -Syu\n"
 }
 
 version() {
-    echo -e "\n    ${colorW}$name ${colorG}$version"
-    echo -e "    ${reset}$description"
-    echo -e "    ${colorW}$author ${colorG}$date${reset}\n"
+  echo -e "\n    ${colorW}$name ${colorG}$version"
+  echo -e "    ${reset}$description"
+  echo -e "    ${colorW}$author ${colorG}$date${reset}\n"
 }
 
+###########################
+#### UTILITY FUNCTIONS ####
+###########################
+prepSelectedArray() {
+  arrayI=( $1 )
+  indx=0
+  for i in ${arrayI[@]}; do
+    selectedUpdates[indx]=${pkgUpgrades[$i]}
+    ((indx++))
+  done
+}
+
+checkInstall() {
+  $pacman -Qq $1 &>/dev/null    
+}
+
+error() {
+  echo -e "$marker$1 ${reset}"
+  exit
+}
 
 #####################
 ####### Main ########
 #####################
 
 case $1 in
+-sa)
+  shift  
+  $pacman -Ss $@
+  SearchAur $@
+  ;;
 -s)
-    shift
-    pacman-color -Ss $@
-    SearchAur $@
-    ;;
+  shift
+  SearchAur $@
+  ;;
 -abs)
-    shift
-    CopyAbs $@
-    ;;
+  shift
+  CopyAbs $@
+  ;;
 -d)
-    shift
-    DownloadAur $@
-    ;;
+  shift
+  DownloadAur $@
+  ;;
 -de)
-    shift
-    edit=true
-    DownloadAur $@
-    ;;
+  shift
+  edit=true
+  DownloadAur $@
+  ;;
 -m)
-    shift
-    DownloadAur $@
-    MakePackages $@
-    ;;
+  shift
+  DownloadAur $@
+  MakePackages $@
+  ;;
 -me)
-    shift
-    edit=true
-    DownloadAur $@
-    MakePackages $@
-    ;;
+  shift
+  edit=true
+  DownloadAur $@
+  MakePackages $@
+  ;;
 -i)
-    shift
-    installPkg=true
-    DownloadAur $@
-    MakePackages $@
-    ;;
+  shift
+  installPkg=true
+  DownloadAur $@
+  MakePackages $@
+  ;;
 -ie)
-    shift
-    installPkg=true
-    edit=true
-    DownloadAur $@
-    MakePackages $@
-    ;;
+  shift
+  installPkg=true
+  edit=true
+  DownloadAur $@
+  MakePackages $@
+  ;;
 -u)
-    installPkg=true
-    UpgradeAur
-    ;;
+  installPkg=true
+  UpgradeAur
+  ;;
 -ue)
-    edit=true
-    installPkg=true
-    UpgradeAur
-    ;;
+  edit=true
+  installPkg=true
+  UpgradeAur
+  ;;
 -ua)
-    installPkg=true
-    sudo pacman -Syu
-    UpgradeAur
-    ;;
+  installPkg=true
+  sudo $pacman -Syu
+  UpgradeAur
+  ;;
 -v)
-    version
-    ;;
+  version
+  ;;
+-S*)
+  sudo $pacman $@
+  ;;
+-R*)
+  sudo $pacman $@
+  ;;
+-Q*)
+  $pacman $@
+  ;;
+-T*)
+  sudo $pacman $@
+  ;;
+-U*)
+  sudo $pacman $@
+  ;;
+-V*)
+  pacman $@
+  ;;
+-h)
+  $pacman $@
+  ;;
+--*)
+  sudo $pacman $@
+  ;;
 *)
-    Usage $1
+  Usage $1
 esac
 
+# vim:set ts=2 sw=2 et:
