@@ -413,7 +413,7 @@ CleanUp() {
   if $clean; then
     cd $buildDir
     echo -e "${bMarker}Cleaning up..."
-    rm -r $@ && echo -e "${lMarker}done" || error "Clean up Failed!"
+    $sudo rm -r $@ && echo -e "${lMarker}done" || error "Clean up Failed!"
   fi
 }
 
@@ -535,11 +535,15 @@ case $1 in
       fi
     done
 
-    $sudo $pacmanBin -S $extraArgs$@ && exit || echo -e "Attempting install from AUR..."
-    installPkg=true
-    DownloadAur $@
-    MakePackages $@
-    CleanUp $@
+    for pkg in "$@"; do
+      if ! ( $sudo $pacmanBin -S $extraArgs$pkg ); then 
+        echo -e "Attempting install from AUR..."
+          installPkg=true
+          DownloadAur $pkg
+          MakePackages $pkg
+          CleanUp $pkg
+      fi
+    done
   else
     $sudo $pacmanBin $@
   fi
