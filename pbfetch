@@ -5,10 +5,10 @@
 ######################################################
 
 name="pbfetch"
-version="v0.5"
+version="v0.9"
 description="Simple script to fetch PKGBUILDS from aur & abs"
 author="-Erik Hardesty"
-date="(12/22/09)"
+date="(12/28/09)"
 
 ######################################################
 ################# Begin User Settings ################
@@ -19,17 +19,40 @@ date="(12/22/09)"
 #####################################
 fallback=true
 
+#########################################
+#### Clean up after package building ####
+#########################################
+# if false then package along with source
+# will be left in the build directory
+clean=true
+#clean=false
+
 #########################
 #### Colorize output ####
 #########################
 color=true
 #color=false
 
+# default colors
+color1="\e[1;37m" # white
+color2="\e[1;34m" # blue
+color3="\e[1;31m" # red
+color4="\e[1;32m" # green
+color5="\e[1;33m" # yellow
+color6="\e[1;35m" # magenta
+
+
 #######################
 #### Pacman binary ####
 #######################
-#pacman="pacman"
-pacman="pacman-color"
+#pacmanBin="pacman"
+pacmanBin="pacman-color"
+
+############################################
+#### Automatically use sudo when needed ####
+############################################
+useSudo=true
+#useSudo=false
 
 #########################
 #### PKGBUILD editor ####
@@ -41,6 +64,11 @@ editor="vim"
 #### BUILD DIRECTORY ####
 #########################
 buildDir=~/build
+
+##############################
+#### PACMAN PACKAGE CACHE ####
+##############################
+pkgCache=/var/cache/pacman/pkg/
 
 #############################
 #### LOCAL abs DIRECTORY ####
@@ -56,43 +84,40 @@ aur="http://aur.archlinux.org/packages"
 ################## End User Settings #################
 ######################################################
 
+
+
+
 ################
 #### COLORS ####
 ################
 if $color; then
     bold=$(tput bold)
     reset=$(tput sgr0)
-    colorW="\e[1;37m" # white
-    colorB="\e[1;34m" # blue
-    colorR="\e[1;31m" # red
-    colorG="\e[1;32m" # green
-    colorY="\e[1;33m" # yellow
-    colorM="\e[1;35m" # magenta
 else
     bold=''
     reset=''
-    colorW=''
-    colorB=''
-    colorR=''
-    colorG=''
-    colorY=''
-    colorM=''
+    color1=''
+    color2=''
+    color3=''
+    color4=''
+    color5=''
+    color6=''
 fi
 
 ##########################
 #### OUTPUT SHORTCUTS ####
 ##########################
-leftB="$bold$colorB["
-rightB="$bold$colorB]"
-bMarker="$bold$colorG==> $reset"
-lMarker="  $colorB-> "
-ext="${leftB}${colorG}Extracted${rightB}${reset}"
-downl="${leftB}${colorG}Downloaded${rightB}${reset}"
-copied="${leftB}${colorG}Copied${rightB}${reset}"
-dFail="$leftB${colorR}downlOAD FAILED$rightB$reset"
-cFail="$leftB${colorR}CLEAN UP FAILED$rightB$reset"
-nFound="$leftB${colorR}NOT FOUND$rightB$reset"
-installed="${leftB}${colorW}installed${rightB}${reset}"
+bracketL="$bold$color2["
+bracketR="$bold$color2]"
+bMarker="$bold$color4==> ${reset}"
+lMarker="  $color2-> ${reset}"
+ext="${bracketL}${color4}Extracted${bracketR}${reset}"
+downl="${bracketL}${color4}Downloaded${bracketR}${reset}"
+copied="${bracketL}${color4}Copied${bracketR}${reset}"
+dFail="$bracketL${color3}DOWNLOAD FAILED$bracketR$reset"
+cFail="$bracketL${color3}CLEAN UP FAILED$bracketR$reset"
+nFound="$bracketL${color3}NOT FOUND$bracketR$reset"
+installed="${bracketL}${color1}installed${bracketR}${reset}"
 
 ##################################
 #### WORKING GLOBAL VARIABLES ####
@@ -100,12 +125,17 @@ installed="${leftB}${colorW}installed${rightB}${reset}"
 pkgName="" 
 pkgVersion=""
 pkgRelease=""
-declare -a pkgUpgrades
-declare -a selectedUpdates
+pkgUpgrades=()
+selectedUpdates=()
 upgradeIndx=0
 force=true
 edit=false
 installPkg=false
+confSourced=false
+noConfirm=''
+if $useSudo; then
+  sudo="sudo"
+fi
 
 
 #############################
@@ -127,8 +157,8 @@ SearchAur() {
     desc="$(echo $line | awk -F '"' '{print $20}')"
     flag="$(echo $line | awk -F '"' '{print $44}')"
 
-    echo -e -n "${colorM}aur/${colorW}$name ${colorG}$vers${bold}$reset"
-    [ "$flag" = "1" -o "$flag" = "OutOfDate" ] && echo -e -n " ${colorR}[out of date]${bold}${reset}"
+    echo -e -n "${color6}aur/${color1}$name ${color4}$vers${bold}$reset"
+    [ "$flag" = "1" -o "$flag" = "OutOfDate" ] && echo -e -n " ${color3}[out of date]${bold}${reset}"
     if checkInstall "$name";
     then
 	echo -e -n " $installed"
@@ -142,142 +172,134 @@ SearchAur() {
 }
 
 DownloadAur() {
-  cd $buildDir || error "$leftB${colorR}Build directory does not exist$rightB"
+  cd $buildDir || error "$bracketL${color3}Build directory does not exist$bracketR"
 
   for i in "$@"
   do
-    wget -q ${aur}/$i/$i.tar.gz || error "$colorW$i $dFail$reset"
-    echo -e "$bMarker$colorW$i $downl" 
+    wget -q ${aur}/$i/$i.tar.gz || error "$color1$i $dFail$reset"
+    echo -e "$bMarker$color1$i $downl" 
 
-    bsdtar -x -f $i.tar.gz && echo -e "$bMarker$colorW$i $ext"
+    bsdtar -x -f $i.tar.gz && echo -e "$bMarker$color1$i $ext"
     rm $i.tar.gz || error "${cFail}"
     if $edit ; then
       editPB $i
-      echo -e "$lMarker$colorW$i ${leftB}${colorB}${colorG}Edit complete${rightB}"
+      echo -e "$lMarker$color1$i ${bracketL}${color2}${color4}Edit complete${bracketR}$reset"
     fi
   done
 
-}
-
-editPB() {
-  if [ -e $1/PKGBUILD ]; then
-    $editor $buildDir/$1/PKGBUILD
-  else
-    echo -e "${colorR}${bold}Error: ${colorW}Could not open PKGBUILD!${reset}"
-  fi
 }
 
 CopyAbs() {
   for i in "$@"
   do
-    cp -r `find /var/abs -name "$i"` $buildDir || error "$colorW$i $nFound"
-    echo -e "$bMarker$colorW$i $copied"
+    cp -r `find /var/abs -name "$i"` $buildDir || error "$color1$i $nFound"
+    echo -e "$bMarker$color1$i $copied"
   done
 }
 
 MakePackages() {
-  for i in "$@"
+  local x
+  for x in "$@"
   do
-    if [ -e $buildDir/$i/PKGBUILD ]; then
-      cd $buildDir/$i
+    if [ -e $buildDir/$x/PKGBUILD ]; then
+      cd $buildDir/$x
       if $installPkg; then
 	      if $force; then
           CheckDepends
-	        makepkg -fi
+          cd $buildDir/$x
+          echo $x
+          makepkg -sfi $noConfirm
 	      else
           CheckDepends
-	        makepkg -i
+	        cd $buildDir/$x
+          makepkg -si
 	      fi
       elif $force; then
         CheckDepends
-	      makepkg -f
+        cd $buildDir/$x
+	      makepkg -sf
       else
         CheckDepends
-	      makepkg 
+        cd $buildDir/$x
+	      makepkg -s
       fi
     else
-      echo -e "${colorR}${bold}Error: ${colorW}Could not open PKGBUILD!${reset}"
+      echo -e "${color3}${bold}Error: ${color1}Could not open PKGBUILD!${reset}"
     fi
   done
 }
 
 CheckDepends() {
-  echo -e "\nChecking package dependencies..."
-  
-  #Set architecture variables
-  source /etc/makepkg.conf
-  source /etc/abs.conf
+  echo -e "\nChecking package for AUR dependencies..."
+
+ if ! $confSourced; then
+    #Set architecture variables
+    source /etc/makepkg.conf
+    source /etc/abs.conf
+    confSourced=true
+ fi
 
   #Remove everything from build() to end of file for sourcing
   cat PKGBUILD | sed '/build()/,$ d' > PKGBUILD.source
   source PKGBUILD.source &> /dev/null
   rm PKGBUILD.source
-  
-  dependsNeeded=$(sudo $pacman -T ${depends[@]})
+ 
+  local depsFromAUR=$($sudo $pacmanBin -T ${depends[@]} ${makedepends[@]})
   #if pacman returns nothing then all dependencies
   #already installed, no need to continue
-  if [[ $dependsNeeded == "" ]]; then
+  if [[ $depsFromAUR == "" ]]; then
     return
   fi
 
-  depsFromRepo=()
-  depsFromAUR=()
-  availFromRepo=$(pacman -Sql)
-
+  local availFromRepo=($(pacman -Sql | sort))
   
-  #check if dependency is available from repositories
-  #save in array if so
-  count=-1
-  countAUR=0
-  for dep in ${dependsNeeded[@]}; do
+  #Remove versioning from package names
+  local count=0
+  for package in ${depsFromAUR[@]}; do
+    depsFromAUR[$count]=${package%%=*}
+    depsFromAUR[$count]=${depsFromAUR[$count]%%>*}
+    depsFromAUR[$count]=${depsFromAUR[$count]%%<*}
     ((count++))
-    for pkg in ${availFromRepo[@]}; do
-      if [[ $pkg == $dep ]]; then
-        depsFromRepo[$count]=$dep
-      fi
-    done
-    if [[ ${depsFromRepo[$count]} != $dep ]]; then
-      depsFromAUR[$countAUR]=$dep
-      ((countAUR++))
-    fi
   done
 
+  #Binary search for dependencies that are available
+  #in the repo, if so, remove them from depsFromAUR
+  local count=0
+  for dep in ${depsFromAUR[@]}; do
+    local first=0
+    local last=${#availFromRepo[*]}
+    local middle=$(($last/2))
+    local found=false
+
+    while ! $found && [[ $first -le $last ]]; do
+      if [[ "${availFromRepo[$middle]}" == "$dep" ]]; then
+        found=true
+      elif [[ "${availFromRepo[$middle]}" > "$dep" ]]; then
+        last=$(($middle-1))
+        middle=$(( ($last+$first) /2))
+      else
+        first=$(($middle+1))
+        middle=$(( ($last+$first) /2))
+      fi
+    done
+    if $found; then
+      unset depsFromAUR[$count]
+    fi
+    ((count++))
+  done
+  
   if [[ ${#depsFromAUR[*]} -gt 0 ]]; then
     echo -e "Installing dependencies from AUR..."
     DownloadAur ${depsFromAUR[@]} || error "Dependency not found! Exiting..."
     MakePackages ${depsFromAUR[@]} || exit
   fi
-
-  sudo $pacman -S --needed ${depsFromRepo[@]}
-
-}
-
-checkVersion () {   
-  TEMP="$(curl -s "http://aur.archlinux.org/rpc.php?type=info&arg=$pkgName" \
-	| awk -F '"' '{print $18}')"
-  aurversion="$(echo $TEMP | awk -F "-" '{print $1}')"
-  aurRELEASE="$(echo $TEMP | awk -F "-" '{print $2}')"
-
-
-  if [ "$aurversion" \> "$pkgVersion" ]; then
-    UPGRADE="${colorG}Update Available"
-    echo $pkgName >> $buildDir/upgrades.txt
-  elif [[ "$aurversion" = "$pkgVersion" && "$aurRELEASE" > "$pkgRelease" ]]; then
-    UPGRADE="${colorG}Update Available"
-    echo $pkgName >> $buildDir/upgrades.txt
-  elif [ "$aurversion" == "" ]; then
-    UPGRADE="${colorY}Not found on aur"
-  else
-    UPGRADE="${colorB}Up to date"
-  fi
-	    
-  echo -e "$pkgName $pkgVersion-$pkgRelease ${colorW}$aurversion-$aurRELEASE $UPGRADE${reset}"
+  return
 }
 
 UpgradeAur() {
   echo -e "Checking aur for package updates..."
     
-  $pacman -Qm | sort > $buildDir/localList.txt
+  $pacmanBin -Qm | sort > $buildDir/localList.txt
 
   while read line; do
     pkgName="$(echo $line | awk -F " " '{print $1}')"
@@ -296,12 +318,12 @@ UpgradeAur() {
     
   echo
   for ((i = 0; i<$upgradeIndx; i++)); do
-    echo -e -n "${colorG}$i${reset}:${colorY}${pkgUpgrades[$i]} ${reset}| "
+    echo -e -n "${color4}$i${reset}:${color5}${pkgUpgrades[$i]} ${reset}| "
   done
-
-  echo -e "\n${colorB}------------------------------------------------------------------${reset}"
-  echo -e "${colorW}Do you want to update these packages?"
-  echo -e "${colorW}Press ${colorG}Y ${colorW}to update all, ${colorG} C${colorW} to choose which to update: [Y/n/c]${reset}"
+  echo -e ${reset}
+  echo -e "${color2}------------------------------------------------------------------${reset}"
+  echo -e "${color1}Do you want to update these packages?"
+  echo -e "${color1}Press ${color4}Y ${color1}to update all, ${color4} C${color1} to choose which to update: [Y/n/c]${reset}"
 
   while true; do
     read ync
@@ -310,6 +332,7 @@ UpgradeAur() {
     	force=true
 	DownloadAur ${pkgUpgrades[@]}
 	MakePackages ${pkgUpgrades[@]}
+  CleanUp ${pkgUpgrades[@]}
        	break;;
       [Nn]* ) break;;
       [Cc]* )
@@ -319,12 +342,14 @@ UpgradeAur() {
 	prepSelectedArray "$choices"
 	DownloadAur ${selectedUpdates[@]}
 	MakePackages ${selectedUpdates[@]}
+  CleanUp ${selectedUpdates[@]}
 	break;
 	;;
       *) 
 	force=true
 	DownloadAur ${pkgUpgrades[@]}
 	MakePackages ${pkgUpgrades[@]}
+  CleanUp ${pkgUpgrades[@]}
 	;;
     esac
   done
@@ -332,36 +357,10 @@ UpgradeAur() {
   rm $buildDir/localList.txt
 }
 
-Usage() {
-  echo -e "Usage: pbfetch [opiton] [package1] [package2] ....\n"
-  echo -e "  options:"
-  echo -e "    -d  Download from aur and extract to build directory"
-  echo -e "    -de Download from aur, extract and edit PKGBUILD"
-  echo -e "    -m  Download from aur, extract, and make the package(s)"
-  echo -e "    -me Download from aur, extract, edit PKGBUILD and make the package(s)"
-  echo -e "    -i  Download from aur, extract, make and install package(s)"
-  echo -e "    -ie Download from aur, extract, edit PKGBUILD, make and install package(s)"
-  echo -e "    -s  Search aur for any package given (Searches name and description)"
-  echo -e "    -sa Search repo and aur for any package given"
-  echo -e "    -u  Check aur for package updates"
-  echo -e "    -ue Check aur for package updates and edit PKGBUILD before install"
-  echo -e "    -ua Check aur and official repos for updates"
-  echo -e "    -abs Copy from local abs folder to build directory"
-  echo -e "    -v  Display version information\n"
-  echo -e "Example: pbfetch -d nvidia-beta nvidia-utils-beta\n\n"
-  echo -e "  pbfetch will also pass any pacman related options to the "
-  echo -e "  pacman binary specifed in the script, eg. pbfetch -Qs\n"
-}
-
-version() {
-  echo -e "\n    ${colorW}$name ${colorG}$version"
-  echo -e "    ${reset}$description"
-  echo -e "    ${colorW}$author ${colorG}$date${reset}\n"
-}
-
 ###########################
 #### UTILITY FUNCTIONS ####
 ###########################
+
 prepSelectedArray() {
   arrayI=( $1 )
   indx=0
@@ -372,13 +371,90 @@ prepSelectedArray() {
 }
 
 checkInstall() {
-  $pacman -Qq $1 &>/dev/null    
+  $pacmanBin -Qq $1 &>/dev/null    
 }
 
 error() {
   echo -e "$bMarker$1 ${reset}"
   exit
 }
+
+checkVersion () {   
+  TEMP="$(curl -s "http://aur.archlinux.org/rpc.php?type=info&arg=$pkgName" \
+	| awk -F '"' '{print $18}')"
+  aurversion="$(echo $TEMP | awk -F "-" '{print $1}')"
+  aurRELEASE="$(echo $TEMP | awk -F "-" '{print $2}')"
+
+
+  if [ "$aurversion" \> "$pkgVersion" ]; then
+    UPGRADE="${color4}Update Available"
+    echo $pkgName >> $buildDir/upgrades.txt
+  elif [[ "$aurversion" = "$pkgVersion" && "$aurRELEASE" > "$pkgRelease" ]]; then
+    UPGRADE="${color4}Update Available"
+    echo $pkgName >> $buildDir/upgrades.txt
+  elif [ "$aurversion" == "" ]; then
+    UPGRADE="${color5}Not found on aur"
+  else
+    UPGRADE="${color2}Up to date"
+  fi
+	    
+  echo -e "$pkgName $pkgVersion-$pkgRelease ${color1}$aurversion-$aurRELEASE $UPGRADE${reset}"
+}
+
+editPB() {
+  if [ -e $1/PKGBUILD ]; then
+    $editor $buildDir/$1/PKGBUILD
+  else
+    echo -e "${color3}${bold}Error: ${color1}Could not open PKGBUILD!${reset}"
+  fi
+}
+
+CleanUp() {
+  if $clean; then
+    cd $buildDir
+    echo -e "${bMarker}Cleaning up..."
+    rm -r $@ && echo -e "${lMarker}done" || error "Clean up Failed!"
+  fi
+}
+
+Usage() {
+  echo -e "Usage: pbfetch [opiton] [package1] [package2] ....\n"
+  echo -e "  options:"
+  echo -e "    -d  Download from aur and extract to build directory"
+  echo -e "    -de Download from aur, extract and edit PKGBUILD"
+  echo -e "    -m  Download from aur, extract, and make the package(s)"
+  echo -e "    -me Download from aur, extract, edit PKGBUILD and"
+  echo -e "        make the package(s)"
+  echo -e "    -i  Download from aur, extract, make and install package(s)"
+  echo -e "    -ie Download from aur, extract, edit PKGBUILD, make and"
+  echo -e "        install package(s)"
+  echo -e "    -s  Search aur for any package given"
+  echo -e "        (Searches name and description)"
+  echo -e "    -sa Search repo and aur for any package given"
+  echo -e "    -u  Check aur for package updates"
+  echo -e "    -ue Check aur for package updates and "
+  echo -e "        edit PKGBUILD before install"
+  echo -e "    -ua Check aur and official repos for updates"
+  echo -e "    -abs Copy from local abs folder to build directory"
+  echo -e "    -v  Display version information\n"
+  echo -e "    If Pacman sync fallback option is set then:"
+  echo -e "      -S Attempt install with Pacman if package not found"
+  echo -e "         then install from AUR"
+  echo -e "      -Ss Search Pacman repos and AUR"
+  echo -e "      -Syu Refresh database and upgrade from repo and"
+  echo -e "           AUR\n"
+  echo -e "Example: pbfetch -S xorg"
+  echo -e "         pbfetch -d nvidia-beta nvidia-utils-beta\n\n"
+  echo -e "  pbfetch will also pass any pacman related options to the "
+  echo -e "  pacman binary specifed in the script, eg. pbfetch -Qs\n"
+}
+
+version() {
+  echo -e "\n    ${color1}$name ${color4}$version"
+  echo -e "    ${reset}$description"
+  echo -e "    ${color1}$author ${color4}$date${reset}\n"
+}
+
 
 #####################
 ####### Main ########
@@ -387,7 +463,7 @@ error() {
 case $1 in
 -sa)
   shift  
-  $pacman -Ss $@
+  $pacmanBin -Ss $@
   SearchAur $@
   ;;
 -s)
@@ -423,6 +499,7 @@ case $1 in
   installPkg=true
   DownloadAur $@
   MakePackages $@
+  CleanUp $@
   ;;
 -ie)
   shift
@@ -430,6 +507,7 @@ case $1 in
   edit=true
   DownloadAur $@
   MakePackages $@
+  CleanUp $@
   ;;
 -u)
   installPkg=true
@@ -442,46 +520,85 @@ case $1 in
   ;;
 -ua)
   installPkg=true
-  sudo $pacman -Syu
+  $sudo $pacmanBin -Syu
   UpgradeAur
   ;;
 -S)
   if $fallback; then
     shift
-    sudo $pacman -S $@ && exit || echo -e "Attempting install from AUR..."
+
+    extraArgs=""
+    for i in "$@"; do
+      if [[ $i == --* ]]; then
+        extraArgs="$extraArgs$i "
+        shift
+      fi
+    done
+
+    $sudo $pacmanBin -S $extraArgs$@ && exit || echo -e "Attempting install from AUR..."
     installPkg=true
     DownloadAur $@
     MakePackages $@
+    CleanUp $@
   else
-    sudo $pacman $@
+    $sudo $pacmanBin $@
+  fi
+  ;;
+-Ss)
+  if $fallback; then
+    shift
+    $pacmanBin -Ss $@
+    SearchAur $@
+  else
+    $pacmanBin -Ss $@
+  fi
+  ;;
+-Su)
+  if $fallback; then
+    shift
+    installPkg=true
+    $sudo $pacmanBin -Su $@
+    UpgradeAur
+  else
+    $sudo $pacmanBin -Su $@
+  fi
+  ;;
+-Syu)
+  if $fallback; then
+    shift
+    installPkg=true
+    $sudo $pacmanBin -Syu $@
+    UpgradeAur
+  else
+    $sudo $pacmanBin -Syu $@
   fi
   ;;
 -v)
   version
   ;;
 -S*)
-  sudo $pacman $@
+  $sudo $pacmanBin $@
   ;;
 -R*)
-  sudo $pacman $@
+  $sudo $pacmanBin $@
   ;;
 -Q*)
-  $pacman $@
+  $pacmanBin $@
   ;;
 -T*)
-  sudo $pacman $@
+  $sudo $pacmanBin $@
   ;;
 -U*)
-  sudo $pacman $@
+  $sudo $pacmanBin $@
   ;;
 -V*)
-  pacman $@
+  $pacmanBin $@
   ;;
 -h)
-  $pacman $@
+  $pacmanBin $@
   ;;
 --*)
-  sudo $pacman $@
+  $sudo $pacmanBin $@
   ;;
 *)
   Usage $1
