@@ -10,82 +10,10 @@ description="Simple script to fetch PKGBUILDS from aur & abs"
 author="-Erik Hardesty"
 date="(12/28/09)"
 
-######################################################
-################# Begin User Settings ################
-######################################################
-
-#####################################
-#### Pacman sync fallback to AUR ####
-#####################################
-fallback=true
-
-#########################################
-#### Clean up after package building ####
-#########################################
-# if false then package along with source
-# will be left in the build directory
-clean=true
-#clean=false
-
-#########################
-#### Colorize output ####
-#########################
-color=true
-#color=false
-
-# default colors
-color1="\e[1;37m" # white
-color2="\e[1;34m" # blue
-color3="\e[1;31m" # red
-color4="\e[1;32m" # green
-color5="\e[1;33m" # yellow
-color6="\e[1;35m" # magenta
-
-
 #######################
-#### Pacman binary ####
+#### SOURCE CONFIG ####
 #######################
-#pacmanBin="pacman"
-pacmanBin="pacman-color"
-
-############################################
-#### Automatically use sudo when needed ####
-############################################
-useSudo=true
-#useSudo=false
-
-#########################
-#### PKGBUILD editor ####
-#########################
-editor="vim"
-#editor="gvim"
-
-#########################
-#### BUILD DIRECTORY ####
-#########################
-buildDir=~/build
-
-##############################
-#### PACMAN PACKAGE CACHE ####
-##############################
-pkgCache=/var/cache/pacman/pkg/
-
-#############################
-#### LOCAL abs DIRECTORY ####
-#############################
-abs="/var/abs"
-
-#################
-#### aur URL ####
-#################
-aur="http://aur.archlinux.org/packages"
-
-######################################################
-################## End User Settings #################
-######################################################
-
-
-
+source /etc/pbfetch.conf
 
 ################
 #### COLORS ####
@@ -127,6 +55,8 @@ pkgVersion=""
 pkgRelease=""
 pkgUpgrades=()
 selectedUpdates=()
+installFromRepo=()
+installFromAUR=()
 upgradeIndx=0
 force=true
 edit=false
@@ -316,7 +246,12 @@ UpgradeAur() {
   rm $buildDir/upgrades.txt
 
     
-  echo
+  if [[ ${#pkgUpgrades[*]} -gt 0 ]]; then
+    echo -en "\n${bMarker}${color1}Updates:${reset} "
+  else
+    echo
+  fi
+
   for ((i = 0; i<$upgradeIndx; i++)); do
     echo -e -n "${color4}$i${reset}:${color5}${pkgUpgrades[$i]} ${reset}| "
   done
@@ -337,7 +272,7 @@ UpgradeAur() {
       [Nn]* ) break;;
       [Cc]* )
 	force=true
-        echo -n "Enter the number of the corresponding package(s) (separate numbers by space)"	
+        echo -en "Enter the number of the corresponding\npackage(s) (separate numbers by space)"	
 	read choices
 	prepSelectedArray "$choices"
 	DownloadAur ${selectedUpdates[@]}
@@ -357,6 +292,30 @@ UpgradeAur() {
   rm $buildDir/localList.txt
 }
 
+FallbackInstall() {
+    local extraArgs=""
+    for i in "$@"; do
+      if [[ $i == --* ]]; then
+        extraArgs="$extraArgs$i "
+        shift
+      fi
+    done
+
+    separateRepoAUR $@
+    if [[ ${#installFromRepo[*]} -gt 0 ]]; then
+      $sudo $pacmanBin -S $extraArgs${installFromRepo[@]}
+    fi
+    
+    if [[ ${#installFromAUR[*]} -gt 0 ]]; then
+      echo -e "Attempting install from AUR..."
+      installPkg=true
+      DownloadAur ${installFromAUR[@]}
+      MakePackages ${installFromAUR[@]}
+      CleanUp ${installFromAUR[@]}
+    fi
+}
+
+
 ###########################
 #### UTILITY FUNCTIONS ####
 ###########################
@@ -367,6 +326,38 @@ prepSelectedArray() {
   for i in ${arrayI[@]}; do
     selectedUpdates[indx]=${pkgUpgrades[$i]}
     ((indx++))
+  done
+}
+
+separateRepoAUR() {
+  local availFromRepo=($(pacman -Sql | sort))
+
+  local countRepo=0
+  local countAUR=0
+  for pkg in "$@"; do
+    local first=0
+    local last=${#availFromRepo[*]}
+    local middle=$(($last/2))
+    local found=false
+
+    while ! $found && [[ $first -le $last ]]; do
+      if [[ "${availFromRepo[$middle]}" == "$pkg" ]]; then
+        found=true
+      elif [[ "${availFromRepo[$middle]}" > "$pkg" ]]; then
+        last=$(($middle-1))
+        middle=$(( ($last+$first) /2))
+      else
+        first=$(($middle+1))
+        middle=$(( ($last+$first) /2))
+      fi
+    done
+    if $found; then
+      installFromRepo[$countRepo]=$pkg
+      ((countRepo++))
+    else
+      installFromAUR[$countAUR]=$pkg
+      ((countAUR++))
+    fi
   done
 }
 
@@ -436,12 +427,15 @@ Usage() {
   echo -e "        edit PKGBUILD before install"
   echo -e "    -ua Check aur and official repos for updates"
   echo -e "    -abs Copy from local abs folder to build directory"
-  echo -e "    -v  Display version information\n"
-  echo -e "    If Pacman sync fallback option is set then:"
+  echo -e "    -v  Display version information\n\n"
+  echo -e "  Pacman Fallback(must be set in config)"
+  echo -e "    options:"
   echo -e "      -S Attempt install with Pacman if package not found"
-  echo -e "         then install from AUR"
+  echo -e "         in repo then install from AUR"
   echo -e "      -Ss Search Pacman repos and AUR"
-  echo -e "      -Syu Refresh database and upgrade from repo and"
+  echo -e "      -Sy Refresh database then install from repo or"
+  echo -e "          AUR if not found in repository"
+  echo -e "      -Syu --aur  Refresh database and upgrade from repo and"
   echo -e "           AUR\n"
   echo -e "Example: pbfetch -S xorg"
   echo -e "         pbfetch -d nvidia-beta nvidia-utils-beta\n\n"
@@ -526,26 +520,18 @@ case $1 in
 -S)
   if $fallback; then
     shift
-
-    extraArgs=""
-    for i in "$@"; do
-      if [[ $i == --* ]]; then
-        extraArgs="$extraArgs$i "
-        shift
-      fi
-    done
-
-    for pkg in "$@"; do
-      if ! ( $sudo $pacmanBin -S $extraArgs$pkg ); then 
-        echo -e "Attempting install from AUR..."
-          installPkg=true
-          DownloadAur $pkg
-          MakePackages $pkg
-          CleanUp $pkg
-      fi
-    done
+    FallbackInstall $@  
   else
     $sudo $pacmanBin $@
+  fi
+  ;;
+-Sy)
+  if $fallback; then
+    shift
+    $sudo $pacmanBin -Sy
+    FallbackInstall $@
+  else
+    $sudo $pacmanBin -Sy
   fi
   ;;
 -Ss)
@@ -570,9 +556,49 @@ case $1 in
 -Syu)
   if $fallback; then
     shift
-    installPkg=true
+
+    AUR=false
+    extraArgs=""
+    for pkg in $@; do
+      if [[ $pkg == "--aur" ]]; then
+        AUR=true
+        shift
+      elif [[ $pkg == --* ]]; then
+        extraArgs="$extraArgs$i "
+        shift
+      fi
+    done
+
     $sudo $pacmanBin -Syu $@
-    UpgradeAur
+    if $AUR; then
+      installPkg=true
+      UpgradeAur
+    fi
+  else
+    $sudo $pacmanBin -Syu $@
+  fi
+  ;;
+-Suy)
+  if $fallback; then
+    shift
+
+    AUR=false
+    extraArgs=""
+    for pkg in $@; do
+      if [[ $pkg == "--aur" ]]; then
+        AUR=true
+        shift
+      elif [[ $pkg == --* ]]; then
+        extraArgs="$extraArgs$i "
+        shift
+      fi
+    done
+
+    $sudo $pacmanBin -Syu $@
+    if $AUR; then
+      installPkg=true
+      UpgradeAur
+    fi
   else
     $sudo $pacmanBin -Syu $@
   fi
