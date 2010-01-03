@@ -248,7 +248,8 @@ UpgradeAur() {
   if [[ ${#pkgUpgrades[*]} -gt 0 ]]; then
     echo -en "\n${bMarker}${color1}Updates:${reset} "
   else
-    echo
+    echo -e "\n${color1}No updates available on AUR${reset}"
+    return
   fi
 
   for ((i = 0; i<$upgradeIndx; i++)); do
@@ -372,14 +373,15 @@ error() {
 checkVersion () {   
   TEMP="$(curl -s "http://aur.archlinux.org/rpc.php?type=info&arg=$pkgName" \
 	| awk -F '"' '{print $18}')"
-  aurversion="$(echo $TEMP | awk -F "-" '{print $1}')"
-  aurRELEASE="$(echo $TEMP | awk -F "-" '{print $2}')"
+  aurversion=$(echo $TEMP | awk -F "-" '{print $1}')
+  aurRELEASE=$(echo $TEMP | awk -F "-" '{print $2}')
 
-
-  if [ "$aurversion" \> "$pkgVersion" ]; then
+  touch $buildDir/upgrades.txt
+  if [[ $(vercmp $aurversion $pkgVersion) -gt 0 ]]; then
     UPGRADE="${color4}Update Available"
+    echo $aurversion $pkgVersion
     echo $pkgName >> $buildDir/upgrades.txt
-  elif [[ "$aurversion" = "$pkgVersion" && "$aurRELEASE" > "$pkgRelease" ]]; then
+  elif [[ "$aurversion" = "$pkgVersion" && $(vercmp $aurRELEASE $pkgRelease) -gt 0 ]]; then
     UPGRADE="${color4}Update Available"
     echo $pkgName >> $buildDir/upgrades.txt
   elif [ "$aurversion" == "" ]; then
