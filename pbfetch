@@ -81,7 +81,7 @@ SearchAur() {
 
   [ ! -s $buildDir/results.lst ] && exit
 
-  sort $buildDir/results.lst | uniq | while read line; do
+  sort -t ":" -k 3.2 $buildDir/results.lst | uniq | while read line; do
     name="$(echo $line | awk -F '"' '{print $8}')"
     vers="$(echo $line | awk -F '"' '{print $12}')"
     desc="$(echo $line | awk -F '"' '{print $20}')"
@@ -98,7 +98,6 @@ SearchAur() {
   done
   
   rm $buildDir/results.lst
-  exit
 }
 
 DownloadAur() {
