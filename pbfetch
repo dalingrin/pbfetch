@@ -196,7 +196,7 @@ CheckDepends() {
 }
 
 UpgradeAur() {
-#echo -e "Checking aur for package updates..."
+  echo -e "Checking aur for package updates..."
  
   local count=0
   local localPkgCount=0
@@ -336,9 +336,6 @@ checkVersion () {
   curl -s ${curlArgs}| sed 's/{"type"/\n/g' | sed '/^$/d' >> $tempFile
   echo "" >> $tempFile
   
-  wait
-  echo -e "Checking aur for package updates..."
-
   
   ## Hackish json parsing for version numbers
   local count=0
@@ -488,7 +485,7 @@ main(){
     ;;
   -ua)
     installPkg=true
-    $sudo $pacmanBin -Syua &
+    $sudo $pacmanBin -Syu
     UpgradeAur
     ;;
   -S)
@@ -521,7 +518,7 @@ main(){
     if $fallback; then
     
       installPkg=true
-      $sudo $pacmanBin -Su $@ &
+      $sudo $pacmanBin -Su $@ 
       UpgradeAur
     else
       $sudo $pacmanBin -Su $@
@@ -543,7 +540,7 @@ main(){
         fi
       done
 
-      $sudo $pacmanBin -Syu $@ &
+      $sudo $pacmanBin -Syu $@ 
       if $AUR; then
         installPkg=true
         UpgradeAur
@@ -568,7 +565,7 @@ main(){
         fi
       done
 
-      $sudo $pacmanBin -Syu $@ &
+      $sudo $pacmanBin -Syu $@ 
       if $AUR; then
         installPkg=true
         UpgradeAur
