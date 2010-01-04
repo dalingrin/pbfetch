@@ -10,6 +10,12 @@ description="Simple script to fetch PKGBUILDS from aur & abs"
 author="-Erik Hardesty"
 date="(01/03/2010)"
 
+#######################
+#### SOURCE CONFIG ####
+#######################
+source /etc/pbfetch.conf
+
+
 ################
 #### COLORS ####
 ################
@@ -596,11 +602,6 @@ main(){
     Usage $1
   esac
 }
-
-#######################
-#### SOURCE CONFIG ####
-#######################
-source /etc/pbfetch.conf
 
 if [[ ! -d $buildDir ]]; then
   error "Build directory does not exist!\nCheck configuration in /etc/pbfetch.conf"
