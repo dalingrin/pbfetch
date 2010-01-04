@@ -235,28 +235,29 @@ UpgradeAur() {
     read ync
     case $ync in
       [Yy]* ) 
-    	force=true
-	DownloadAur ${pkgUpgrades[@]}
-	MakePackages ${pkgUpgrades[@]}
-  CleanUp ${pkgUpgrades[@]}
+    	  force=true
+	      DownloadAur ${pkgUpgrades[@]}
+	      MakePackages ${pkgUpgrades[@]}
+        CleanUp ${pkgUpgrades[@]}
        	break;;
       [Nn]* ) break;;
       [Cc]* )
-	force=true
+	      force=true
         echo -en "Enter the number of the corresponding\npackage(s) (separate numbers by space)"	
-	read choices
-	prepSelectedArray "$choices"
-	DownloadAur ${selectedUpdates[@]}
-	MakePackages ${selectedUpdates[@]}
-  CleanUp ${selectedUpdates[@]}
-	break;
-	;;
+	      read choices
+	      prepSelectedArray "$choices"
+	      DownloadAur ${selectedUpdates[@]}
+	      MakePackages ${selectedUpdates[@]}
+        CleanUp ${selectedUpdates[@]}
+	      break;
+ 	      ;;
       *) 
-	force=true
-	DownloadAur ${pkgUpgrades[@]}
-	MakePackages ${pkgUpgrades[@]}
-  CleanUp ${pkgUpgrades[@]}
-	;;
+	      force=true
+	      DownloadAur ${pkgUpgrades[@]}
+	      MakePackages ${pkgUpgrades[@]}
+        CleanUp ${pkgUpgrades[@]}
+        break
+	      ;;
     esac
   done
 
@@ -519,7 +520,7 @@ main(){
     if $fallback; then
     
       installPkg=true
-      $sudo $pacmanBin -Su $@
+      $sudo $pacmanBin -Su $@ &
       UpgradeAur
     else
       $sudo $pacmanBin -Su $@
@@ -566,7 +567,7 @@ main(){
         fi
       done
 
-      $sudo $pacmanBin -Syu $@
+      $sudo $pacmanBin -Syu $@ &
       if $AUR; then
         installPkg=true
         UpgradeAur
