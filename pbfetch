@@ -81,7 +81,7 @@ SearchAur() {
     desc="$(echo $line | awk -F '"' '{print $14}')"
     flag="$(echo $line | awk -F '"' '{print $38}')"
 
-    
+    wait # wait for pacman -Ss to finish
 
     echo -e -n "${color6}aur/${color1}$name ${color4}$vers${bold}$reset"
     [ "$flag" = "1" -o "$flag" = "OutOfDate" ] && echo -e -n " ${color3}[out of date]${bold}${reset}"
@@ -335,6 +335,7 @@ checkVersion () {
   tempFile=$(mktemp --suffix=-pbfetch)
   curl -s ${curlArgs}| sed 's/{"type"/\n/g' | sed '/^$/d' >> $tempFile
   echo "" >> $tempFile
+  
   wait
   echo -e "Checking aur for package updates..."
 
@@ -430,7 +431,7 @@ main(){
   case $1 in
   -sa)
     shift  
-    $pacmanBin -Ss $@
+    $pacmanBin -Ss $@ &
     SearchAur $1
     ;;
   -s)
@@ -487,7 +488,7 @@ main(){
     ;;
   -ua)
     installPkg=true
-    $sudo $pacmanBin -Syu
+    $sudo $pacmanBin -Syua &
     UpgradeAur
     ;;
   -S)
@@ -510,7 +511,7 @@ main(){
   -Ss)
     if $fallback; then
       shift
-      $pacmanBin -Ss $@
+      $pacmanBin -Ss $@ &
       SearchAur $1
     else
       $pacmanBin -Ss $@
