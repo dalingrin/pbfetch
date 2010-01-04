@@ -81,6 +81,8 @@ SearchAur() {
     desc="$(echo $line | awk -F '"' '{print $14}')"
     flag="$(echo $line | awk -F '"' '{print $38}')"
 
+    
+
     echo -e -n "${color6}aur/${color1}$name ${color4}$vers${bold}$reset"
     [ "$flag" = "1" -o "$flag" = "OutOfDate" ] && echo -e -n " ${color3}[out of date]${bold}${reset}"
     if checkInstall "$name";
@@ -194,7 +196,7 @@ CheckDepends() {
 }
 
 UpgradeAur() {
-  echo -e "Checking aur for package updates..."
+#echo -e "Checking aur for package updates..."
  
   local count=0
   local localPkgCount=0
@@ -211,8 +213,7 @@ UpgradeAur() {
     ((count++))
   done
   localPkgCount=0
-
-  #
+  
   checkVersion
   
   if [[ ${#pkgUpgrades[*]} -gt 0 ]]; then
@@ -333,6 +334,9 @@ checkVersion () {
   tempFile=$(mktemp --suffix=-pbfetch)
   curl -s ${curlArgs}| sed 's/{"type"/\n/g' | sed '/^$/d' >> $tempFile
   echo "" >> $tempFile
+  wait
+  echo -e "Checking aur for package updates..."
+
   
   ## Hackish json parsing for version numbers
   local count=0
@@ -537,7 +541,7 @@ main(){
         fi
       done
 
-      $sudo $pacmanBin -Syu $@
+      $sudo $pacmanBin -Syu $@ &
       if $AUR; then
         installPkg=true
         UpgradeAur
