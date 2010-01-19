@@ -428,7 +428,7 @@ main(){
   case $1 in
   -sa)
     shift  
-    $pacmanBin -Ss $@ &
+    $pacmanBin -Ss $@ 
     SearchAur $1
     ;;
   -s)
@@ -508,7 +508,7 @@ main(){
   -Ss)
     if $fallback; then
       shift
-      $pacmanBin -Ss $@ &
+      $pacmanBin -Ss $@ 
       SearchAur $1
     else
       $pacmanBin -Ss $@
@@ -516,10 +516,25 @@ main(){
     ;;
   -Su)
     if $fallback; then
-    
-      installPkg=true
+      shift
+
+      AUR=false
+      extraArgs=""
+      for pkg in $@; do
+        if [[ $pkg == "--aur" ]]; then
+          AUR=true
+          shift
+        elif [[ $pkg == --* ]]; then
+          extraArgs="$extraArgs$i "
+          shift
+        fi
+      done
+
       $sudo $pacmanBin -Su $@ 
-      UpgradeAur
+      if $AUR; then
+        installPkg=true
+        UpgradeAur
+      fi
     else
       $sudo $pacmanBin -Su $@
     fi
