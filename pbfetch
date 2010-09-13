@@ -423,7 +423,7 @@ Usage() {
   echo -e "    -ua Check aur and official repos for updates"
   echo -e "    -abs Copy from local abs folder to build directory"
   echo -e "    -v  Display version information\n\n"
-  echo -e "  Pacman Fallback(must be set in config)"
+  echo -e "  Pacman Fallback(On by default)"
   echo -e "    options:"
   echo -e "      -S Attempt install with Pacman if package not found"
   echo -e "         in repo then install from AUR"
