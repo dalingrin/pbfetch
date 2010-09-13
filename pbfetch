@@ -5,14 +5,34 @@
 ######################################################
 
 name="pbfetch"
-version="v0.9.1"
+version="v0.9.5"
 description="Simple script to fetch PKGBUILDS from aur & abs"
 author="-Erik Hardesty"
-date="(01/03/2010)"
+date="(09/13/2010)"
 
-#######################
-#### SOURCE CONFIG ####
-#######################
+########################
+#### Default Config ####
+########################
+fallback=true
+clean=true
+color=true
+color1="\e[1;37m" # white
+color2="\e[1;34m" # blue
+color3="\e[1;31m" # red
+color4="\e[1;32m" # green
+color5="\e[1;33m" # yellow
+color6="\e[1;35m" # magenta
+pacmanBin="pacman"
+editor=nano
+buildDir=~/build
+pkgCache=/var/cache/pacman/pkg
+abs=/var/abs
+aur="http://aur.archlinux.org/packages"
+
+
+############################
+#### SOURCE USER CONFIG ####
+############################
 source /etc/pbfetch.conf
 
 
@@ -305,11 +325,16 @@ separateRepoAUR() {
   local repoCount=0
   for pkg in "$@"; do
     if [[ $(pacman -Sql | grep -x $pkg) == $pkg ]]; then
-	    installFromRepo[$repoCount]=$pkg
+      installFromRepo[$repoCount]=$pkg
       ((repoCount++))
     else
-      installFromAUR[$aurCount]=$pkg
-      ((aurCount++))
+	if [ -n "$(pacman -Sg $pkg)" ]; then
+	  installFromRepo[$repoCount]=$pkg
+	  ((repoCount++))
+	else
+          installFromAUR[$aurCount]=$pkg
+          ((aurCount++))
+	fi
     fi
   done
 }
