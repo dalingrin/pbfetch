@@ -27,7 +27,7 @@ editor=nano
 buildDir=~/build
 pkgCache=/var/cache/pacman/pkg
 abs=/var/abs
-aur="http://aur.archlinux.org/packages"
+aur="https://aur.archlinux.org/packages"
 
 
 ############################
@@ -93,7 +93,7 @@ sudo=sudo
 
 SearchAur() {
 
-  curl -s "http://aur.archlinux.org/rpc.php?type=search&arg=$@" \
+  curl -s "https://aur.archlinux.org/rpc.php?type=search&arg=$@" \
 	| sed 's/,"Name"/\n/g' | grep $@ \
   | sort -t ":" -k 1.2 | while read line; do
     name="$(echo $line | awk -F '"' '{print $2}')"
@@ -351,7 +351,7 @@ error() {
 checkVersion () { 
   ## Prep curl arguments in order to call curl only once.
   ## This way only one handshake is needed with server(slighly faster)
-  local url="http://aur.archlinux.org/rpc.php?type=info&arg="
+  local url="https://aur.archlinux.org/rpc.php?type=info&arg="
   local curlArgs=""
   for x in ${pkgName[@]}; do
     curlArgs="$curlArgs$(echo "${url}$x ")"
