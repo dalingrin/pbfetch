@@ -324,7 +324,7 @@ separateRepoAUR() {
   local aurCount=0
   local repoCount=0
   for pkg in "$@"; do
-    if [[ $(pacman -Sql | grep -x $pkg) == $pkg ]]; then
+    if [[ $(pacman -Sql | grep -x $pkg | head -n1) == $pkg ]]; then
       installFromRepo[$repoCount]=$pkg
       ((repoCount++))
     else
