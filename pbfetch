@@ -370,7 +370,7 @@ checkVersion () {
   ## Hackish json parsing for version numbers
   local count=0
   while read line; do 
-    local temp=$(echo $line | awk -F '"' '{print $16}')
+    local temp=$(echo $line | awk -F '"' '{print $20}')
     local aurversion=$(echo $temp | awk -F "-" '{print $1}')
     local aurRELEASE=$(echo $temp | awk -F "-" '{print $2}')
     if [[ $(vercmp $aurversion ${pkgVersion[$count]}) -gt 0 ]]; then
