@@ -373,7 +373,9 @@ checkVersion () {
     local temp=$(echo $line | awk -F '"' '{print $20}')
     local aurversion=$(echo $temp | awk -F "-" '{print $1}')
     local aurRELEASE=$(echo $temp | awk -F "-" '{print $2}')
-    if [[ $(vercmp $aurversion ${pkgVersion[$count]}) -gt 0 ]]; then
+    if [ -z $aurversion ]; then
+      UPGRADE="${color3}Not found on aur"
+    elif [[ $(vercmp $aurversion ${pkgVersion[$count]}) -gt 0 ]]; then
       UPGRADE="${color4}Update Available"
       pkgUpgrades[$upgradeIndx]=${pkgName[$count]}
       ((upgradeIndx++))
@@ -381,8 +383,6 @@ checkVersion () {
       UPGRADE="${color4}Update Available"
       pkgUpgrades[$upgradeIndx]=${pkgName[$count]}
       ((upgradeIndx++))
-    elif [ "$aurversion" == "" ]; then
-      UPGRADE="${color5}Not found on aur"
     else
       UPGRADE="${color2}Up to date"
     fi 
