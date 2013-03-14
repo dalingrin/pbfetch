@@ -98,8 +98,8 @@ SearchAur() {
   | sort -t ":" -k 1.2 | while read line; do
     name="$(echo $line | awk -F '"' '{print $2}')"
     vers="$(echo $line | awk -F '"' '{print $6}')"
-    desc="$(echo $line | awk -F '"' '{print $14}')"
-    flag="$(echo $line | awk -F '"' '{print $38}')"
+    desc="$(echo $line | awk -F '"' '{print $12}')"
+    flag="$(echo $line | awk -F '"' '{print $24}')"
 
     wait # wait for pacman -Ss to finish
 
