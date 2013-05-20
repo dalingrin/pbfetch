@@ -120,7 +120,7 @@ DownloadAur() {
 
   for i in "$@"
   do
-    curl -s0 ${aur}/${i:0:2}/$i/$i.tar.gz || error "$color1$i $dFail$reset"
+    curl -sO ${aur}/${i:0:2}/$i/$i.tar.gz || error "$color1$i $dFail$reset"
     echo -e "$bMarker$color1$i $downl" 
 
     bsdtar -x -f $i.tar.gz && echo -e "$bMarker$color1$i $ext"
